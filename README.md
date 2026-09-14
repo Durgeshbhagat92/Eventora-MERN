@@ -81,3 +81,14 @@ cd client
 npm run dev
 ```
 *(Client will run on a local port provided by Vite, typically `http://localhost:5173`)*
+
+## Deploy to Render
+
+The repository includes a `render.yaml` blueprint for deploying the client and API as one web service.
+
+1. Push this repository to GitHub and create a new **Blueprint** in [Render](https://render.com/).
+2. Select the repository and apply the `render.yaml` blueprint.
+3. In the service environment settings, provide `MONGO_URI`, `JWT_SECRET`, `EMAIL_USER`, and `EMAIL_PASS`.
+4. Deploy. Render supplies `PORT` automatically, and the app serves both the React client and `/api` routes from the generated service URL.
+
+For local development, `VITE_API_URL` may be set to a separate API origin. When it is omitted, the client uses the current origin, which is the correct setting for the bundled production deployment.
