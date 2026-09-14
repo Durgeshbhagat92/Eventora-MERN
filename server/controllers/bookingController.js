@@ -1,6 +1,6 @@
-const Booking = require('../models/Booking');
 const Event = require('../models/Event');
 const OTP = require('../models/OTP');
+const Booking = require('../repositories/bookingRepository');
 const { sendBookingEmail, sendOTPEmail } = require('../utils/email');
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -31,7 +31,7 @@ exports.bookEvent = async (req, res) => {
         if (!event) return res.status(404).json({ message: 'Event not found' });
         if (event.availableSeats <= 0) return res.status(400).json({ message: 'No seats available' });
 
-        const existingBooking = await Booking.findOne({ userId: req.user.id, eventId });
+        const existingBooking = await Booking.findByUserAndEvent(req.user.id, eventId);
         if (existingBooking && existingBooking.status !== 'cancelled') {
             return res.status(400).json({ message: 'Already booked or pending' });
         }
@@ -55,7 +55,10 @@ exports.bookEvent = async (req, res) => {
 exports.confirmBooking = async (req, res) => {
     try {
         const { paymentStatus } = req.body; // 'paid' or 'not_paid'
-        const booking = await Booking.findById(req.params.id).populate('userId').populate('eventId');
+        const booking = await Booking.findById(req.params.id, {
+            populateUser: true,
+            populateEvent: true
+        });
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
         if (booking.status === 'confirmed') return res.status(400).json({ message: 'Booking is already confirmed' });
@@ -66,10 +69,8 @@ exports.confirmBooking = async (req, res) => {
         }
 
         booking.status = 'confirmed';
-        if (paymentStatus) {
-            booking.paymentStatus = paymentStatus;
-        }
-        await booking.save();
+        if (paymentStatus) booking.paymentStatus = paymentStatus;
+        await Booking.updateStatus(req.params.id, 'confirmed', paymentStatus);
 
         event.availableSeats -= 1;
         await event.save();
@@ -86,8 +87,8 @@ exports.confirmBooking = async (req, res) => {
 exports.getMyBookings = async (req, res) => {
     try {
         const bookings = req.user.role === 'admin'
-            ? await Booking.find().populate('eventId').populate('userId', 'name email').sort({ createdAt: -1 })
-            : await Booking.find({ userId: req.user.id }).populate('eventId').sort({ createdAt: -1 });
+            ? await Booking.findAll()
+            : await Booking.findForUser(req.user.id);
         res.json(bookings);
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });
@@ -105,8 +106,7 @@ exports.cancelBooking = async (req, res) => {
 
         const wasConfirmed = booking.status === 'confirmed';
 
-        booking.status = 'cancelled';
-        await booking.save();
+        await Booking.cancel(req.params.id);
 
         // Only restore the seat if it was actually confirmed and deducted
         if (wasConfirmed) {
