@@ -282,6 +282,18 @@ app.delete("/api/bookings/:id", protect, handle(async (req, res) => {
   res.json({ message: "Booking cancelled successfully" });
 }));
 
+if (process.env.NODE_ENV === "production") {
+  const clientPath = path.resolve(__dirname, "../../client/dist");
+  app.use(express.static(clientPath));
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/")) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(clientPath, "index.html"));
+  });
+}
+
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(error);
   res.status(500).json({ message: "Server Error", error: error.message });
